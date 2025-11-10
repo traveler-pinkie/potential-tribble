@@ -242,6 +242,21 @@ int ccheck(int argc, char *argv[])
 
         Move m;
         while ((m = read_move_from_pipe(init, board)) != 0) {
+            Player current_player = player_to_move(board);
+            
+            // Log to transcript with proper formatting BEFORE applying move
+            if (transcript) {
+                int move_num = move_number(board);
+                if (current_player == X) {
+                    fprintf(transcript, "%d. ", (move_num / 2) + 1);
+                } else {
+                    fprintf(transcript, "%d. ... ", (move_num / 2) + 1);
+                }
+                print_move(board, m, transcript);
+                fprintf(transcript, "\n");
+                fflush(transcript);
+            }
+            
             apply(board, m);
 
             // Update display if active
@@ -260,13 +275,6 @@ int ccheck(int argc, char *argv[])
                     if (transcript) fclose(transcript);
                     exit(EXIT_FAILURE);
                 }
-            }
-
-            // Log to transcript
-            if (transcript) {
-                print_move(board, m, transcript);
-                fprintf(transcript, "\n");
-                fflush(transcript);
             }
         }
         fclose(init);
@@ -444,13 +452,15 @@ int ccheck(int argc, char *argv[])
             print_bd(board, stdout);
         }
 
-        // Log to transcript
+        // Log to transcript  (note: this is AFTER apply(), so move_num has been incremented)
         if (transcript) {
             int move_num = move_number(board);
             if (current_player == X) {
-                fprintf(transcript, "%d. ", (move_num + 1) / 2);
+                // White move: move_num will be odd (1,3,5...), display as (1,2,3...)
+                fprintf(transcript, "%d. ", (move_num / 2) + 1);
             } else {
-                fprintf(transcript, "%d. ... ", (move_num + 1) / 2);
+                // Black move: move_num will be even (2,4,6...), display as (1,2,3...)
+                fprintf(transcript, "%d. ... ", move_num / 2);
             }
             print_move(board, move, transcript);
             fprintf(transcript, "\n");
