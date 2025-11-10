@@ -411,13 +411,13 @@ int ccheck(int argc, char *argv[])
         // Apply the move
         apply(board, move);
 
-        // Print move if engine made it in tournament mode
-        if (current_player == engine_player && tournament_mode) {
+        // Print move - in tournament mode, always prefix with @@@
+        if (tournament_mode) {
             printf("@@@");
             print_move(board, move, stdout);
             printf("\n");
             fflush(stdout);
-        } else if (!no_display || tournament_mode) {
+        } else if (!no_display) {
             // Just print normally
             print_move(board, move, stdout);
             printf("\n");

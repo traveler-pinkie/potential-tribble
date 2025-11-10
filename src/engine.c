@@ -80,35 +80,37 @@ void engine(Board *bp)
                 break;
             }
 
-            // If it's our turn and we need to move within time limit
+            // If it's our turn and avgtime > 0, check time budget before searching
             if (our_turn && avgtime > 0) {
-                // If avgtime is 0, only search to depth 1 and move immediately
-                if (avgtime == 0 && depth > 1) {
-                    fprintf(stderr, "[ENGINE] avgtime=0, stopping after depth 1\n");
+                // Calculate time budget for this move
+                // Total time we should have used = avgtime * moves_we_made
+                // Actual time used = xtime or otime (depending on which player we are)
+                // Time available for this move = avgtime + (budget - actual)
+                Player our_player = player_to_move(board);
+                int moves_made = move_number(board);
+                int moves_we_made = (moves_made + 1) / 2;  // Half the moves are ours
+                int total_time_used = (our_player == X) ? xtime : otime;
+                int time_budget = avgtime * moves_we_made;
+                int time_available = avgtime + (time_budget - total_time_used);
+                
+                // Make sure we have positive time available
+                if (time_available < 1) {
+                    time_available = 1;
+                }
+
+                // Check if we have time to search to this depth
+                // Don't start a search if estimated time exceeds what we have available
+                if (times[depth] > time_available) {
                     break;
                 }
-                
-                // If avgtime > 0, use time control
-                if (avgtime > 0) {
-                    // Calculate time available for this move
-                    int moves_made = move_number(board);
-                    int total_time_used = (player_to_move(board) == X) ? xtime : otime;
-                    int avg_time_per_move = (moves_made > 0) ? (total_time_used / moves_made) : 0;
-                    int time_available = avgtime - avg_time_per_move;
 
-                    // Check if we have time to search deeper
-                    if (depth > 1 && times[depth] > time_available) {
-                        break;
-                    }
-
-                    // Set alarm for time limit
-                    struct itimerval timer;
-                    timer.it_value.tv_sec = time_available;
-                    timer.it_value.tv_usec = 0;
-                    timer.it_interval.tv_sec = 0;
-                    timer.it_interval.tv_usec = 0;
-                    setitimer(ITIMER_REAL, &timer, NULL);
-                }
+                // Set alarm for time limit - give ourselves the average time per move
+                struct itimerval timer;
+                timer.it_value.tv_sec = time_available;
+                timer.it_value.tv_usec = 0;
+                timer.it_interval.tv_sec = 0;
+                timer.it_interval.tv_usec = 0;
+                setitimer(ITIMER_REAL, &timer, NULL);
             }
 
             // Perform search at current depth
