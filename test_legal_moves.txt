@@ -1,0 +1,4 @@
+white:A3-C3
+black:I7-G7
+white:C3-C4
+black:H8-F8

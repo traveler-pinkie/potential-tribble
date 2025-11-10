@@ -1,0 +1,5 @@
+white:D4-F4
+black:K7-I7
+white:E5-E3
+black:J8-J6
+white:F4-F2

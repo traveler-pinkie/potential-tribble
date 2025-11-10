@@ -422,13 +422,11 @@ int ccheck(int argc, char *argv[])
         // Print move - in tournament mode, always prefix with @@@
         if (tournament_mode) {
             printf("@@@");
-            print_move(board, move, stdout);
-            printf("\n");
+        }
+        print_move(board, move, stdout);
+        printf("\n");
+        if (tournament_mode) {
             fflush(stdout);
-        } else if (!no_display) {
-            // Just print normally
-            print_move(board, move, stdout);
-            printf("\n");
         }
 
         // Update display if active
@@ -501,6 +499,9 @@ int ccheck(int argc, char *argv[])
     if (engine_in) fclose(engine_in);
     if (engine_out) fclose(engine_out);
     if (transcript) fclose(transcript);
+    
+    // Free board memory
+    free(board);
 
     // Wait for any remaining children
     while (waitpid(-1, NULL, WNOHANG) > 0);

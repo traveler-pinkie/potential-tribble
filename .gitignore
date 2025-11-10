@@ -3,3 +3,6 @@ build/
 *.o
 *.d
 *~
+vgcore.*
+core.*
+*.core
