@@ -228,6 +228,10 @@ process_command:
             // Apply opponent's move
             apply(board, m);
 
+            // Send acknowledgement
+            printf("OK\n");
+            fflush(stdout);
+
             // Check if this matches our predicted move
             if (depth_completed > 0 && m == principal_var[0]) {
                 // Principal variation is still valid, shift it

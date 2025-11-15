@@ -20,6 +20,7 @@ static volatile sig_atomic_t sigchld_received = 0;
 static volatile sig_atomic_t sigint_received = 0;
 static volatile sig_atomic_t sighup_received = 0;
 static volatile sig_atomic_t sigpipe_received = 0;
+static volatile sig_atomic_t sigterm_received = 0;
 
 static pid_t display_pid = 0;
 static pid_t engine_pid = 0;
@@ -39,6 +40,10 @@ static void sighup_handler(int sig) {
 
 static void sigpipe_handler(int sig) {
     sigpipe_received = 1;
+}
+
+static void sigterm_handler(int sig) {
+    sigterm_received = 1;
 }
 
 // Helper function to kill child processes
@@ -146,7 +151,7 @@ int ccheck(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    sa.sa_handler = SIG_IGN;
+    sa.sa_handler = sigterm_handler;
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("sigaction SIGTERM");
         exit(EXIT_FAILURE);
@@ -243,21 +248,22 @@ int ccheck(int argc, char *argv[])
         Move m;
         while ((m = read_move_from_pipe(init, board)) != 0) {
             Player current_player = player_to_move(board);
+            apply(board, m);
             
-            // Log to transcript with proper formatting BEFORE applying move
+            // Log to transcript if specified (same logic as main game loop)
             if (transcript) {
                 int move_num = move_number(board);
                 if (current_player == X) {
+                    // White move: move_num will be odd (1,3,5...), display as (1,2,3...)
                     fprintf(transcript, "%d. ", (move_num / 2) + 1);
                 } else {
-                    fprintf(transcript, "%d. ... ", (move_num / 2) + 1);
+                    // Black move: move_num will be even (2,4,6...), display as (1,2,3...)
+                    fprintf(transcript, "%d. ... ", move_num / 2);
                 }
                 print_move(board, m, transcript);
                 fprintf(transcript, "\n");
                 fflush(transcript);
             }
-            
-            apply(board, m);
 
             // Update display if active
             if (!no_display && display_out) {
@@ -352,9 +358,13 @@ int ccheck(int argc, char *argv[])
 
     // Main game loop
     int game_over_flag = 0;
+    int error_occurred = 0;
     while (!game_over_flag) {
         // Check for termination signals
-        if (sigint_received || sigpipe_received) {
+        if (sigint_received || sigpipe_received || sigterm_received) {
+            if (sigpipe_received || sigterm_received) {
+                error_occurred = 1;
+            }
             break;
         }
 
@@ -364,6 +374,7 @@ int ccheck(int argc, char *argv[])
             pid_t pid = waitpid(-1, &status, WNOHANG);
             if (pid == display_pid || pid == engine_pid) {
                 fprintf(stderr, "Child process died unexpectedly\n");
+                error_occurred = 1;
                 break;
             }
         }
@@ -382,6 +393,7 @@ int ccheck(int argc, char *argv[])
             move = read_move_from_pipe(engine_in, board);
             if (move == 0) {
                 fprintf(stderr, "Engine died\n");
+                error_occurred = 1;
                 break;
             }
 
@@ -398,6 +410,7 @@ int ccheck(int argc, char *argv[])
             move = read_move_from_pipe(display_in, board);
             if (move == 0) {
                 fprintf(stderr, "Display died\n");
+                error_occurred = 1;
                 break;
             }
 
@@ -419,15 +432,13 @@ int ccheck(int argc, char *argv[])
         // Apply the move
         apply(board, move);
 
-        // Print move - in tournament mode, always prefix with @@@
-        if (tournament_mode) {
+        // Print move - in tournament mode, prefix computer moves with @@@
+        if (tournament_mode && current_player == engine_player) {
             printf("@@@");
         }
         print_move(board, move, stdout);
         printf("\n");
-        if (tournament_mode) {
-            fflush(stdout);
-        }
+        fflush(stdout);
 
         // Update display if active
         if (!no_display && display_out) {
@@ -441,6 +452,7 @@ int ccheck(int argc, char *argv[])
             char ack[256];
             if (fgets(ack, sizeof(ack), display_in) == NULL) {
                 fprintf(stderr, "Display died\n");
+                error_occurred = 1;
                 break;
             }
         }
@@ -472,6 +484,14 @@ int ccheck(int argc, char *argv[])
             fprintf(engine_out, "\n");
             fflush(engine_out);
             kill(engine_pid, SIGHUP);
+            
+            // Wait for acknowledgement
+            char ack[256];
+            if (fgets(ack, sizeof(ack), engine_in) == NULL) {
+                fprintf(stderr, "Engine died\n");
+                error_occurred = 1;
+                break;
+            }
         }
 
         // Check if game is over
@@ -485,7 +505,7 @@ int ccheck(int argc, char *argv[])
             game_over_flag = 1;
 
             // Wait for termination signal
-            while (!sigint_received && !sigchld_received) {
+            while (!sigint_received && !sigchld_received && !sigterm_received) {
                 pause();
             }
             break;
@@ -506,5 +526,5 @@ int ccheck(int argc, char *argv[])
     // Wait for any remaining children
     while (waitpid(-1, NULL, WNOHANG) > 0);
 
-    return EXIT_SUCCESS;
+    return error_occurred ? EXIT_FAILURE : EXIT_SUCCESS;
 }
